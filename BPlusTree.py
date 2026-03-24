@@ -5,6 +5,7 @@ class Node:
         self.keys = []
         self.children = []
         self.values = []
+        self.parent = None
         self.next = None
 
 
@@ -15,28 +16,22 @@ class BPlusTree:
         self.order = order
 
     # Function that searches for a leaf node
-    def leaf_search(self, rating, node, path=None):
-
-        if path is None:
-            path = []
-        path.append(node)
+    def leaf_search(self, rating, node):
+        if node is None:
+            return None
 
         if node.is_leaf:
-            return node, path
+            return node
 
-        children = node.children
-        keys = node.keys
-
-        size = len(children)
-        for i in range(size - 1):
-            if rating < keys[i]:
-                return self.leaf_search(rating, children[i], path)
-
-        return self.leaf_search(rating, children[-1], path)
+        size = len(node.children)
+        for i in range(size-1):
+            if rating < node.keys[i]:
+                return self.leaf_search(rating, node.children[i])
+        return self.leaf_search(rating, node.children[-1])
 
     # Searches for a node with a given rating and returns the values of that node
     def search(self, rating):
-        leaf, _ = self.leaf_search(rating, self.root)
+        leaf = self.leaf_search(rating, self.root)
         for i in range(len(leaf.keys)):
             if leaf.keys[i] == rating:
                 return leaf.values[i]
@@ -44,75 +39,167 @@ class BPlusTree:
 
     # Function that inserts a node into the tree
     def insert(self, rating, data):
-        # Use the helper function to find the node the new data will go in
-        leaf, path = self.leaf_search(rating, self.root)
+        # Find the leaf node and insert key
+        leaf = self.leaf_search(rating, self.root)
+        i = 0
+        while i < len(leaf.keys) and leaf.keys[i] < rating:
+            i += 1
 
-        # Check if the there is a duplicate rating for the game
-        if rating in leaf.keys:
-            index = leaf.keys.index(rating)
-            if isinstance(leaf.values[index], list):
-                leaf.values[index].append(data)
-            else:
-                leaf.values[index] = [leaf.values[index], data]
-
-        # Otherwise, insert key normally
+        # Games with the same ratings stored in an array
+        if i < len(leaf.keys) and leaf.keys[i] == rating:
+            leaf.values[i].append(data)
         else:
-            i = 0
-            while i < len(leaf.keys) and leaf.keys[i] < rating:
-                i += 1
             leaf.keys.insert(i, rating)
             leaf.values.insert(i, [data])
 
-        # Check if the node is now full after insertion
-        k = len(leaf.keys)
-        if k < self.order:
-            return
-
-        # Split leaf node
-        new_leaf = Node(is_leaf=True)
-        split = (k + 1) // 2
-
-        new_leaf.keys = leaf.keys[split:]
-        new_leaf.values = leaf.values[split:]
-        leaf.keys = leaf.keys[:split]
-        leaf.values = leaf.values[:split]
-
-        new_leaf.next = leaf.next
-        leaf.next = new_leaf
-
-        split_key = new_leaf.keys[0]
-
-        # Use path array to traverse up the tree
-        path.pop()
-
-        while path:
-            # Copy the ceil((k+1)/2)th node to the parent
-            parent = path.pop()
-            index = parent.children.index(leaf)
-
-            parent.keys.insert(index, split_key)
-            parent.children.insert(index+1, new_leaf)
-
-            if len(parent.keys) < self.order:
+        # Balance the tree if there is an overflow
+        curr_node = leaf
+        while curr_node:
+            # If there is no overflow, return
+            if len(curr_node.keys) < self.order:
                 return
 
-            # Insert the new node to the parent
-            internal_node = Node()
-            mid = len(parent.keys) // 2
-            promote = parent.keys[mid]
+            # Case 1: Overflow in leaf node
+            if curr_node.is_leaf:
+                # Split the node, where the first node has ceil((m-1) / 2) values
+                new_node = Node(is_leaf=True)
+                index = (self.order + 1) // 2
+                new_node.keys = curr_node.keys[index:]
+                new_node.values = curr_node.values[index:]
+                curr_node.keys = curr_node.keys[:index]
+                curr_node.values = curr_node.values[:index]
 
-            internal_node.keys = parent.keys[mid+1:]
-            internal_node.children = parent.children[mid+1:]
-            parent.keys = parent.keys[:mid]
-            parent.children = parent.children[:mid+1]
+                new_node.next = curr_node.next
+                curr_node.next = new_node
 
-            # Continue loop until a parent is found that does not need to split
-            leaf = parent
-            new_leaf = internal_node
-            split_key = promote
+            # Case 2: Overflow in non-leaf node
+            else:
+                # Split the node again, but the nodes should store only keys, not values
+                new_node = Node()
+                index = self.order // 2
 
-        # Split the root of the tree if needed
-        new_root = Node()
-        new_root.keys = [split_key]
-        new_root.children = [self.root, new_leaf]
-        self.root = new_root
+                new_node.keys = curr_node.keys[index+1:]
+                new_node.children = curr_node.children[index+1:]
+                for child in new_node.children:
+                    child.parent = new_node
+
+                curr_node.keys = curr_node.keys[:index]
+                curr_node.children = curr_node.children[:index+1]
+
+            # Handle Parent
+            if curr_node.is_leaf:
+                parent_key = new_node.keys[0]
+            else:
+                parent_key = curr_node.keys[index]
+            # If the new node will be the root for the tree
+            if curr_node.parent is None:
+                root = Node()
+                if curr_node.is_leaf:
+                    root.keys = [new_node.keys[0]]
+                else:
+                    root.keys = [parent_key]
+                root.children = [curr_node, new_node]
+                curr_node.parent = root
+                new_node.parent = root
+                self.root = root
+                return
+
+            # For all other nodes that aren't the root
+            else:
+                parent = curr_node.parent
+                if curr_node.is_leaf:
+                    parent_key = new_node.keys[0]
+
+                j = 0
+                while j < len(parent.children) and parent.children[j] != curr_node:
+                    j += 1
+
+                parent.keys.insert(j, parent_key)
+                parent.children.insert(j+1, new_node)
+                new_node.parent = parent
+
+            curr_node = curr_node.parent
+
+    def merge(self, left, right, parent, index):
+        if left.is_leaf:
+            left.keys.extend(right.keys)
+            left.values.extend(right.values)
+            left.next = right.next
+        else:
+            left.keys.append(parent.keys[index])
+            left.keys.extend(right.keys)
+            left.children.extend(right.children)
+
+        parent.keys.pop(index)
+        parent.children.remove(right)
+        self.balance_tree(parent)
+
+    def balance_tree(self, node):
+        # If leaf node is root
+        if node == self.root:
+            if not node.is_leaf and len(node.children) == 1:
+                self.root = node.children[0]
+                self.root.parent = None
+            return
+
+        min_keys = (self.order - 1) // 2
+        if len(node.keys) >= min_keys:
+            return
+
+        parent = node.parent
+        index = parent.children.index(node)
+
+        left_sibling = parent.children[index-1] if index > 0 else None
+        right_sibling = parent.children[index+1] if index < len(parent.children) - 1 else None
+
+        # Case 1: Borrow from left sibling
+        if left_sibling and len(left_sibling.keys) > min_keys:
+            if node.is_leaf:
+                node.keys.insert(0, left_sibling.keys.pop(-1))
+                node.values.insert(0, left_sibling.values.pop(-1))
+                parent.keys[index-1] = node.keys[0]
+            else:
+                node.keys.insert(0, parent.keys[index-1])
+                parent.keys[index-1] = left_sibling.keys.pop(-1)
+                node.children.insert(0, left_sibling.children.pop(-1))
+            return
+
+        # Case 2: Borrow from right sibling
+        if right_sibling and len(right_sibling.keys) > min_keys:
+            if node.is_leaf:
+                node.keys.append(right_sibling.keys.pop(0))
+                node.values.append(right_sibling.values.pop(0))
+                parent.keys[index] = right_sibling.keys[0]
+            else:
+                node.keys.append(parent.keys[index])
+                parent.keys[index] = right_sibling.keys.pop(0)
+                node.children.append(right_sibling.children.pop(0))
+            return
+
+        # Case 3: Merge
+        if left_sibling:
+            self.merge(left_sibling, node, parent, index-1)
+        else:
+            self.merge(node, right_sibling, parent, index)
+
+    def delete(self, rating, data):
+        leaf = self.leaf_search(rating, self.root)
+        if leaf is None:
+            return
+
+        # Search for key in tree
+        for i in range(len(leaf.keys)):
+            if leaf.keys[i] == rating:
+                # Remove value
+                if data in leaf.values[i]:
+                    leaf.values[i].remove(data)
+
+                # If no values left remove key
+                if len(leaf.values[i]) == 0:
+                    leaf.keys.pop(i)
+                    leaf.values.pop(i)
+
+                break
+        else:
+            return
+        self.balance_tree(leaf)
