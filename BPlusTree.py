@@ -6,7 +6,9 @@ class Node:
         self.children = []
         self.values = []
         self.parent = None
+        # Pointers going both directions at bottom of tree
         self.next = None
+        self.prev = None
 
 
 # Class to define an object for the B+ Tree
@@ -69,8 +71,12 @@ class BPlusTree:
                 curr_node.keys = curr_node.keys[:index]
                 curr_node.values = curr_node.values[:index]
 
+                # Assign both next and prev pointers
                 new_node.next = curr_node.next
+                if curr_node.next:
+                    curr_node.next.prev = new_node
                 curr_node.next = new_node
+                new_node.prev = curr_node
 
             # Case 2: Overflow in non-leaf node
             else:
@@ -120,6 +126,7 @@ class BPlusTree:
 
             curr_node = curr_node.parent
 
+    # Helper function for merge case in delete function
     def merge(self, left, right, parent, index):
         if left.is_leaf:
             left.keys.extend(right.keys)
@@ -134,6 +141,7 @@ class BPlusTree:
         parent.children.remove(right)
         self.balance_tree(parent)
 
+    # Helper function that balances the tree after deletion
     def balance_tree(self, node):
         # If leaf node is root
         if node == self.root:
@@ -203,3 +211,51 @@ class BPlusTree:
         else:
             return
         self.balance_tree(leaf)
+
+    # Find the 10 highest ratings in the tree and return an array containing tuples
+    def find_highest(self, n=10):
+        # Traverse down to rightmost leaf node
+        curr_node = self.root
+        while not curr_node.is_leaf:
+            curr_node = curr_node.children[-1]
+        result = []
+
+        while curr_node and len(result) < n:
+            # Backtrack through the leaf nodes right to left to get values
+            for i in range(len(curr_node.keys)-1, -1, -1):
+                # Also account for keys that have multiple values
+                for value in curr_node.values[i]:
+                    result.append((value[0], value[1], value[2], curr_node.keys[i]))
+                    if len(result) >= n:
+                        break
+            curr_node = curr_node.prev
+        return result
+
+    # Find the 10 highest ratings in the tree given a certain filter
+    def find_highest_sorted(self, n=10, genre=None, platform=None):
+        if genre is None and platform is None:
+            return self.find_highest()
+
+        # Traverse down to rightmost leaf
+        curr_node = self.root
+        while not curr_node.is_leaf:
+            curr_node = curr_node.children[-1]
+        result = []
+
+        while curr_node and len(result) < n:
+            for i in range(len(curr_node.keys)-1, -1, -1):
+                for value in curr_node.values[i]:
+                    if genre is not None and platform is None:
+                        if value[2] == genre:
+                            result.append((value[0], value[1], value[2], curr_node.keys[i]))
+                    elif genre is None and platform is not None:
+                        if value[1] == platform:
+                            result.append((value[0], value[1], value[2], curr_node.keys[i]))
+                    else:
+                        if value[1] == platform and value[2] == genre:
+                            result.append((value[0], value[1], value[2], curr_node.keys[i]))
+
+                    if len(result) >= n:
+                        break
+            curr_node = curr_node.prev
+        return result
