@@ -59,9 +59,13 @@ class MaxHeap:
 
    # Search for all games with a certain rating
     def search(self, rating):
-        if rating in self.index_map:
-            return self.heap[self.index_map[rating]][1]
-        return None
+        games = []
+        for ratings, values in self.heap:
+            if ratings >= rating:
+                games.extend(values)
+       
+       # games.sort(reverse=True, key=lambda x:x[2])
+        return (games)
 
     # Delete one specific game from a rating bucket
     def delete(self, rating, data):

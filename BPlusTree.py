@@ -34,10 +34,13 @@ class BPlusTree:
     # Searches for a node with a given rating and returns the values of that node
     def search(self, rating):
         leaf = self.leaf_search(rating, self.root)
-        for i in range(len(leaf.keys)):
-            if leaf.keys[i] == rating:
-                return leaf.values[i]
-        return None
+        games = []
+        while leaf:
+            for i in range(len(leaf.keys)):
+                if leaf.keys[i] >= rating:
+                    games.extend( leaf.values[i])
+            leaf = leaf.next
+        return games
 
     # Function that inserts a node into the tree
     def insert(self, rating, data):
@@ -84,6 +87,8 @@ class BPlusTree:
                 new_node = Node()
                 index = self.order // 2
 
+                parent_key = curr_node.keys[index]
+
                 new_node.keys = curr_node.keys[index+1:]
                 new_node.children = curr_node.children[index+1:]
                 for child in new_node.children:
@@ -95,8 +100,10 @@ class BPlusTree:
             # Handle Parent
             if curr_node.is_leaf:
                 parent_key = new_node.keys[0]
+            """
             else:
                 parent_key = curr_node.keys[index]
+            """
             # If the new node will be the root for the tree
             if curr_node.parent is None:
                 root = Node()
