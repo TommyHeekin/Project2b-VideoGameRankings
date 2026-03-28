@@ -180,7 +180,7 @@ class App(customtkinter.CTk):
                     if elem.platform == values[2]:
                         gameList.append([elem.title, elem.rating, elem.platform, elem.genre])
         if not gameList:
-            print("No games found")
+            self.showGames([])
             return
         #always give the user a list of up to 10 games that match their specificatios, randomly shuffling the list to prevent the same games from always appearing
         random.shuffle(gameList)
@@ -200,6 +200,12 @@ class App(customtkinter.CTk):
         frame.grid(row =0, column =0, padx=10, pady=10, sticky="nsew")
         recommendation.grid_columnconfigure(0, weight=1)
         recommendation.grid_rowconfigure(0, weight=1)
+        if len(games) == 0:
+            recommended = "No games found"
+            label = customtkinter.CTkLabel(frame, text=recommended, anchor ="w", wraplength=550)
+            label.pack(fill="x", padx=5, pady=5, expand=True)
+            return
+        
         for i in range(len(games)):
             recommended = f"Game {i+ 1}: {games[i][0]}, Rating: {games[i][1]}, Platform: {games[i][2]}, Genre: {games[i][3]}"
             label = customtkinter.CTkLabel(frame, text=recommended, anchor ="w", wraplength=550)
